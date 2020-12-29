@@ -22,6 +22,9 @@ function compare_by_duration {
 }
 
 function compare_by_frames {
+	# TODO Compare multiple frames
+	# TODO Get frames based on duration
+	# TODO Use cache directory
 	local WORK_DIR=`mktemp -d`
 	echo "[DEBUG] Working dir is ${WORK_DIR}"
 
@@ -33,6 +36,7 @@ function compare_by_frames {
 	ffmpeg -i "$2" -ss 00:00:10 -frames:v 1 ${W_FILE2} 1>/dev/null 2>/dev/null
 
 	local DELTA=`compare ${W_FILE1} ${W_FILE2} -format "%[distortion]" ${W_DIFF}`
+	rm -rf ${WORK_DIR}
 
 	echo "[DEBUG] Equality rate is: ${DELTA}"
 
