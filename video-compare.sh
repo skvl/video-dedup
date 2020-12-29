@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 
-# set -Eeuxo pipefail
+# set -x
+
+files=()
+durations=()
 
 function get_duration {
-	return `ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nokey=1:noprint_wrappers=1 "$1"`
+	ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nokey=1:noprint_wrappers=1 "$1" >tmpfile
+	local duration=`cat tmpfile`
+	durations+=($duration)
+	rm -f tmpfile
 }
 
 function compare_by_duration {
@@ -35,7 +41,6 @@ function compare_by_duration_cached {
 
 function compare_by_frames {
 	# TODO Compare multiple frames
-	# TODO Get frames based on duration
 	# TODO Use cache directory
 	local WORK_DIR=`mktemp -d`
 	echo "[DEBUG] Working dir is ${WORK_DIR}"
@@ -44,8 +49,10 @@ function compare_by_frames {
 	local W_FILE2=${WORK_DIR}/2.jpeg
 	local W_DIFF=${WORK_DIR}/diff.jpeg
 
-	ffmpeg -i "$1" -ss 00:00:10 -frames:v 1 ${W_FILE1} 1>/dev/null 2>/dev/null
-	ffmpeg -i "$2" -ss 00:00:10 -frames:v 1 ${W_FILE2} 1>/dev/null 2>/dev/null
+	let "timestamp1 = ${durations[$1]} / 2"
+	echo "[DEBUG] Timestamp ${timestamp1}"
+	ffmpeg -i "${files[$1]}" -vf "select=eq(n\,${timestamp1})" -q:v 3 ${W_FILE1} 1>/dev/null 2>/dev/null
+	ffmpeg -i "${files[$2]}" -vf "select=eq(n\,${timestamp1})" -q:v 3 ${W_FILE2} 1>/dev/null 2>/dev/null
 
 	local DELTA=`compare ${W_FILE1} ${W_FILE2} -format "%[distortion]" ${W_DIFF}`
 	rm -rf ${WORK_DIR}
@@ -62,14 +69,14 @@ function compare_by_frames {
 }
 
 function compare_files {
-	compare_by_duration_cached "$3" "$4"
+	compare_by_duration_cached $1 $2
 	_result=$?
 	if [ ${_result} -eq 0 ]
 	then
 		echo "[DEBUG] \"$1\" differ from \"$2\" by duration"
 		return 1
 	else
-		compare_by_frames "$1" "$2"
+		compare_by_frames $1 $2
 		_result=$?
 		if [ ${_result} -eq 0 ]
 		then
@@ -82,7 +89,6 @@ function compare_files {
 	fi
 }
 
-files=()
 find $1 -type f -exec file -N -i -- {} + | sed -n 's!: video/[^:]*$!!p' >tmpfile
 while read p; do
     files+=("$p")
@@ -92,12 +98,9 @@ rm -f tmpfile
 
 echo "[DEBUG] Found ${#files[@]} video files"
 
-durations=()
 for ((i=0; i<${#files[@]}; i++)); do
 	get_duration "${files[$i]}"
-	_result=$?
-	durations+=($_result)
-	echo "[DEBUG] [$i] Get duration of \"${files[$i]}\": ${_result}"
+	echo "[DEBUG] [$i] Get duration of \"${files[$i]}\": ${durations[$i]}"
 done
 
 # iterate through files using a counter
@@ -106,7 +109,7 @@ for ((i=0; i<${#files[@]}; i++)); do
 		echo "[DEBUG] Compare \"${files[$i]}\" with \"${files[$j]}\""
 
 		# TODO Refactor arguments
-		compare_files "${files[$i]}" "${files[$j]}" $i $j
+		compare_files $i $j
 		_result=$?
 		if [ ${_result} -eq 1 ]
 		then
