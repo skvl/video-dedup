@@ -21,6 +21,18 @@ function compare_by_duration {
 	fi
 }
 
+function compare_by_duration_cached {
+	local DURATION1=${durations[$1]}
+	local DURATION2=${durations[$2]}
+
+	if [ ${DURATION1} -eq ${DURATION2} ]
+	then
+		return 1
+	else
+		return 0
+	fi
+}
+
 function compare_by_frames {
 	# TODO Compare multiple frames
 	# TODO Get frames based on duration
@@ -50,7 +62,7 @@ function compare_by_frames {
 }
 
 function compare_files {
-	compare_by_duration "$1" "$2"
+	compare_by_duration_cached "$3" "$4"
 	_result=$?
 	if [ ${_result} -eq 0 ]
 	then
@@ -70,27 +82,36 @@ function compare_files {
 	fi
 }
 
-array=()
+files=()
 find $1 -print0 -type f -exec file -N -i -- {} + | sed -n 's!: video/[^:]*$!!p' >tmpfile
 while read p; do
-    array+=("$p")
+    files+=("$p")
 done <tmpfile
 rm -f tmpfile
 
-echo "[DEBUG] Found ${#array[@]} video files"
+echo "[DEBUG] Found ${#files[@]} video files"
 
-# iterate through array using a counter
-for ((i=0; i<${#array[@]}; i++)); do
-	for ((j=$i+1; j<${#array[@]}; j++)); do
-		echo "[DEBUG] Compare \"${array[$i]}\" with \"${array[$j]}\""
+durations=()
+for ((i=0; i<${#files[@]}; i++)); do
+	get_duration "${files[$i]}"
+	_result=$?
+	durations+=($_result)
+	echo "[DEBUG] [$i] Get duration of \"${files[$i]}\": ${_result}"
+done
 
-		compare_files "${array[$i]}" "${array[$j]}"
+# iterate through files using a counter
+for ((i=0; i<${#files[@]}; i++)); do
+	for ((j=$i+1; j<${#files[@]}; j++)); do
+		echo "[DEBUG] Compare \"${files[$i]}\" with \"${files[$j]}\""
+
+		# TODO Refactor arguments
+		compare_files "${files[$i]}" "${files[$j]}" $i $j
 		_result=$?
 		if [ ${_result} -eq 1 ]
 		then
-			echo "\"${array[$i]}\" differ from \"${array[$j]}\""
+			echo "\"${files[$i]}\" differ from \"${files[$j]}\""
 		else
-			echo "\"${array[$i]}\" looks equal to \"${array[$j]}\""
+			echo "\"${files[$i]}\" looks equal to \"${files[$j]}\""
 		fi
 	done
 done
