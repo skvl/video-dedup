@@ -83,9 +83,10 @@ function compare_files {
 }
 
 files=()
-find $1 -print0 -type f -exec file -N -i -- {} + | sed -n 's!: video/[^:]*$!!p' >tmpfile
+find $1 -type f -exec file -N -i -- {} + | sed -n 's!: video/[^:]*$!!p' >tmpfile
 while read p; do
     files+=("$p")
+	echo "[DEBUG] Found video file \"$p\""
 done <tmpfile
 rm -f tmpfile
 
